@@ -1,0 +1,21 @@
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+generator db {
+    provider = "prisma-client-js"
+}
+
+model Integration {
+    id                         String  @id @default(auto()) @map("_id") @db.ObjectId
+    service                    String
+    status                     Boolean
+    workspaceId                String
+    slackBotoken               String? @default("")
+    gmailRefreshToken          String? @default("")
+    gmailAccessToken           String? @default("")
+    gmailAccessTokenExpiryDate Int     @default(0)
+}
+
+// TODO: write a script to create prisma folder in project , attach the script as a file to each project
