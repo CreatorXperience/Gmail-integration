@@ -14,9 +14,8 @@ const prisma = new PrismaClient()
 const oauth2_client = new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
-    process.env.REDIRECT_URI + "/google/services"
+    process.env.REDIRECT_URI + "/google/services",
 )
-
 
 app.use(cors())
 app.use(express.json())
@@ -35,7 +34,6 @@ app.get("/google/services", async (req, res) => {
     const { tokens } = await oauth2_client.getToken(code as string)
 
     const parsed_state = JSON.parse(decodeURIComponent(state as string)) as TState
-
     const integration = await prisma.integration.findFirst({
         where: {
             workspaceId: parsed_state.workspaceId,
@@ -45,6 +43,7 @@ app.get("/google/services", async (req, res) => {
 
     if (integration) {
         await prisma.integration.update({ where: { id: integration.id }, data: { gmailRefreshToken: tokens.refresh_token, gmailAccessToken: tokens.access_token } })
+        res.send("gmail integration successful")
         return
     }
 
@@ -60,8 +59,7 @@ app.get("/google/services", async (req, res) => {
     })
 
 
-    res.write("gmail integration activated successfully")
-    res.end()
+    res.send("gmail integration activated successfully");
 })
 
 
