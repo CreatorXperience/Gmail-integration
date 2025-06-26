@@ -20,8 +20,8 @@ const getGmailRouter = <T>(oauth2_client: T | any) => {
             scope: ["https://mail.google.com/"],
             state
         })
-
-        res.send({ message: "auth retrieved successfully", data: { url } })
+        console.log(url)
+        res.redirect(url)
         return
     })
 

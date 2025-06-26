@@ -29,8 +29,6 @@ app.get("/google/services", async (req, res) => {
         res.status(404).send({ message: "code not found, google authentication failed" })
         return
     }
-
-
     const { tokens } = await oauth2_client.getToken(code as string)
 
     const parsed_state = JSON.parse(decodeURIComponent(state as string)) as TState
@@ -42,6 +40,7 @@ app.get("/google/services", async (req, res) => {
     })
 
     if (integration) {
+        // NOTE: remove refresh token
         await prisma.integration.update({ where: { id: integration.id }, data: { gmailRefreshToken: tokens.refresh_token, gmailAccessToken: tokens.access_token } })
         res.send("gmail integration successful")
         return

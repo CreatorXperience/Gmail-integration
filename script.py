@@ -1,9 +1,6 @@
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
-
-
-
 def build_app():
     subprocess.call(["npx", "tsc", "--watch"])
 
