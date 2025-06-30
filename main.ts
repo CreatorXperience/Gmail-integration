@@ -5,6 +5,7 @@ import gmailRouter from "./routes/gmail.routes"
 import { PrismaClient } from "@prisma/client"
 import { google } from "googleapis"
 import type { TState } from "./types"
+import serviceMap from "./utils/serviceMap"
 dotenv.config()
 const app = express()
 
@@ -40,20 +41,23 @@ app.get("/google/services", async (req, res) => {
     })
 
     if (integration) {
-        // NOTE: remove refresh token
-        await prisma.integration.update({ where: { id: integration.id }, data: { gmailRefreshToken: tokens.refresh_token, gmailAccessToken: tokens.access_token } })
+        await prisma.integration.update({ where: { id: integration.id }, data: { gmailAccessToken: tokens.access_token } })
         res.send("gmail integration successful")
         return
     }
+    //NOTE: creation of access token is for specific gmail service e.g gmail, drive
 
+    const credentials = serviceMap("gmail", tokens.access_token as string, tokens.expiry_date as number, tokens.refresh_token as string)
+    if (!credentials) {
+        res.status(404).send({ message: "service not supported" })
+        return
+    }
     await prisma.integration.create({
         data: {
             service: parsed_state.service,
             status: true,
             workspaceId: parsed_state.workspaceId,
-            gmailAccessToken: tokens.access_token,
-            gmailAccessTokenExpiryDate: tokens.expiry_date as number,
-            gmailRefreshToken: tokens.refresh_token
+            ...credentials
         }
     })
 
