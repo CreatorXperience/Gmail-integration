@@ -1,0 +1,27 @@
+import z from "zod"
+const gmailMessage = z.object({
+    text: z.string({ message: "property message is required" }),
+    recipient: z.string({ message: "property recipient is required" }),
+    messageId: z.string({ message: "property messageId is required" }),
+    workspaceId: z.string({ message: "property string is required" }),
+    integrationId: z.string({ message: "property integrationId is required" }),
+    message: z.object({
+        channelId: z.string({ message: "property channelId is required" }),
+        projectId: z.string({ message: "property projectId is required" }),
+        threadId: z.string({ message: "property threadId is required" }),
+        user: z.string({ message: "property user is required" }),
+        userId: z.string({ message: "property userId is required" }),
+    }).optional()
+})
+
+type TGmailMessage = Required<z.infer<typeof gmailMessage>>
+
+const gmailMessageValidator = (payload: TGmailMessage) => {
+    return gmailMessage.required().refine((data) => {
+        const filled = [data.message, data.messageId].filter(Boolean).length
+        return filled === 1
+    }).safeParse(payload)
+}
+
+
+export { gmailMessageValidator, TGmailMessage }
