@@ -1,6 +1,6 @@
 import { Router } from "express";
+import { google } from "googleapis"
 const router = Router()
-
 
 const getGmailRouter = <T>(oauth2_client: T | any) => {
     router.get("/oauth_url", (req, res) => {
@@ -24,8 +24,11 @@ const getGmailRouter = <T>(oauth2_client: T | any) => {
         return
     })
 
+
     return router
 }
+
+
 
 
 
