@@ -31,6 +31,7 @@ const createRabbitMQ = async () => {
         const channel = await connection.createChannel()
 
         channel.assertQueue("send_gmail_message")
+        channel.assertQueue("draft_gmail_message")
         consumers(channel, oauth2_client, redis)
     } catch (e) {
         console.log("❌ 🐰 an Error occured while connecting to RabbitMQ")

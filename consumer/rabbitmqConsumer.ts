@@ -40,10 +40,11 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             console.log("this is not suppose to happen, integration not found")
             return
         }
+        oauth2_client.setCredentials({ access_token: integration.gmailAccessToken, refresh_token: integration.gmailRefreshToken })
+        const gmail = google.gmail({ version: "v1", auth: oauth2_client })
 
         try {
-            oauth2_client.setCredentials({ access_token: integration.gmailAccessToken, refresh_token: integration.gmailRefreshToken })
-            const gmail = google.gmail({ version: "v1", auth: oauth2_client })
+
             const raw_messages = [
                 `To: ${data.recipient}`,
                 'Content-Type: text/plain; charset="UTF-8"',
@@ -62,25 +63,109 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
                 }
             })
             taskData.status = true
+
         } catch (e) {
             taskData.status = false
             channel.ack(message)
-
-            await upsertTask({
-                channel,
-                integration: taskData.integration,
-                message,
-                msgID: taskData.messageId,
-                prisma,
-                redis,
-                status: taskData.status,
-                workspaceId: taskData.workspaceId
-            })
-
         }
 
+        // for a task to fail , then a message already exist
+
+        const { message: exist_msg, ...other } = data
+
+        await upsertTask({
+            channel,
+            integration: taskData.integration,
+            message,
+            msgID: taskData.messageId,
+            prisma,
+            redis,
+            status: taskData.status,
+            workspaceId: taskData.workspaceId,
+            q: "send_gmail_message",
+            payload: JSON.stringify({ ...other, messageId: msgID })
+        })
+
+    })
 
 
+    channel.consume("draft_gmail_message", async (message: ConsumeMessage | null) => {
+
+        if (!message) {
+            throw new Error("Null Rabbit Message")
+        }
+
+        const { error, data } = gmailMessageValidator(JSON.parse(message.content.toString()))
+        if (error) {
+            channel.nack(message, false, false)
+            return
+        }
+
+        const msgID = await validateOrCreateMessage(channel, message, prisma, redis, data)
+        if (!msgID) {
+            channel.nack(message, false, false)
+            throw new Error("messageId not found in both db")
+        }
+
+        const taskData = {
+            messageId: msgID,
+            integration: "gmail",
+            text: "send gmail message",
+            workspaceId: data.workspaceId,
+            status: false // default to fail, we'll update to true if successful
+        };
+
+        const integration = await prisma.integration.findUnique({ where: { id: data.integrationId } })
+
+        if (!integration) {
+            console.log("this is not suppose to happen, integration not found")
+            return
+        }
+        oauth2_client.setCredentials({ access_token: integration.gmailAccessToken, refresh_token: integration.gmailRefreshToken })
+        const gmail = google.gmail({ version: "v1", auth: oauth2_client })
+        try {
+
+            const raw_messages = [
+                `To: ${data.recipient}`,
+                'Content-Type: text/plain; charset="UTF-8"',
+                'MIME-Version: 1.0',
+                `Subject: ${data.subject ? data.subject : ""} `,
+                '',
+                data.text,
+            ].join("\r\n")
+
+            const base64Message = Buffer.from(raw_messages).toString("base64")
+
+            await gmail.users.drafts.create({
+                userId: "me",
+                requestBody: {
+                    message: {
+                        raw: base64Message
+                    }
+                }
+            })
+            taskData.status = true
+
+        } catch (e) {
+            taskData.status = false
+            channel.ack(message)
+        }
+
+        const { message: exist_msg, ...other } = data
+        //NOTE: for a task to fail ,  a message has exist
+
+        await upsertTask({
+            channel,
+            integration: taskData.integration,
+            message,
+            msgID: taskData.messageId,
+            prisma,
+            redis,
+            status: taskData.status,
+            workspaceId: taskData.workspaceId,
+            q: "draft_gmail_message",
+            payload: JSON.stringify({ ...other, messageId: msgID })
+        })
     })
 
 }

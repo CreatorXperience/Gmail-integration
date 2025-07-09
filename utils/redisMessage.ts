@@ -4,9 +4,11 @@ import TMessage from "../types/slackMessage.types";
 
 import { Channel, ConsumeMessage } from "amqplib";
 import { TTask } from "../types/task";
+const MIN = 0
+const MAX = 50
 const redisMessage = async (channel: Channel, message: ConsumeMessage, redis: Redis, msgID: string) => {
     if (redis && redis.client) {
-        const messages = await redis.client.LRANGE('chat_messages', 0, 50);
+        const messages = await redis.client.LRANGE('chat_messages', MIN, MAX);
         if (!messages.length || messages.length < 1) {
             channel.nack(message, false, false)
             throw new Error("No message found in redis")
@@ -29,7 +31,7 @@ const redisMessage = async (channel: Channel, message: ConsumeMessage, redis: Re
 
 const updateRedisMessage = async (channel: Channel, message: ConsumeMessage, redis: Redis, msgID: string, task: TTask) => {
     if (redis && redis.client) {
-        const messages = await redis.client.LRANGE('chat_messages', 0, 50);
+        const messages = await redis.client.LRANGE('chat_messages', MIN, MAX);
         if (!messages.length || messages.length < 1) {
             channel.nack(message, false, false)
             throw new Error("Bad request")

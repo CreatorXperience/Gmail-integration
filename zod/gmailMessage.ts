@@ -5,6 +5,7 @@ const gmailMessage = z.object({
     messageId: z.string({ message: "property messageId is required" }),
     workspaceId: z.string({ message: "property string is required" }),
     integrationId: z.string({ message: "property integrationId is required" }),
+    subject: z.string({ message: "property subject is required to send an email" }),
     message: z.object({
         channelId: z.string({ message: "property channelId is required" }),
         projectId: z.string({ message: "property projectId is required" }),
@@ -14,10 +15,10 @@ const gmailMessage = z.object({
     }).optional()
 })
 
-type TGmailMessage = Required<z.infer<typeof gmailMessage>>
+type TGmailMessage = Partial<z.infer<typeof gmailMessage>>
 
 const gmailMessageValidator = (payload: TGmailMessage) => {
-    return gmailMessage.required().refine((data) => {
+    return gmailMessage.required().partial({ subject: true }).refine((data) => {
         const filled = [data.message, data.messageId].filter(Boolean).length
         return filled === 1
     }).safeParse(payload)
