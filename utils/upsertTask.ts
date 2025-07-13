@@ -22,9 +22,8 @@ type TUpsertTaskParams = {
 
 async function upsertTask(taskParam: TUpsertTaskParams) {
     const { integration, msgID, prisma, status, workspaceId, channel, message: rabbitMsg, redis, q, payload, taskId } = taskParam
-    const current_task = await prisma.task.findUnique({ where: { workspaceId, messageId: msgID, integration, id: taskId } });
+    const current_task = await prisma.task.findUnique({ where: { id: taskId } });
     const message = await prisma.message.findUnique({ where: { id: msgID } })
-
 
     let task: TTask
     if (current_task) {
