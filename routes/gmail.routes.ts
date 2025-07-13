@@ -18,6 +18,7 @@ const getGmailRouter = <T>(oauth2_client: T | any) => {
         const url = oauth2_client.generateAuthUrl({
             access_type: "offline",
             scope: ["https://mail.google.com/"],
+            prompt: "consent",
             state
         })
         res.redirect(url)

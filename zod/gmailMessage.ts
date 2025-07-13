@@ -19,10 +19,7 @@ const gmailMessage = z.object({
 type TGmailMessage = Partial<z.infer<typeof gmailMessage>>
 
 const gmailMessageValidator = (payload: TGmailMessage) => {
-    return gmailMessage.required().partial({ subject: true }).refine((data) => {
-        const filled = [data.message, data.messageId].filter(Boolean).length
-        return filled === 1
-    }).safeParse(payload)
+    return gmailMessage.required().partial({ subject: true, message: true, messageId: true }).safeParse(payload)
 }
 
 const gmailMessageWithAttachement = z.object({
@@ -48,10 +45,7 @@ const gmailMessageWithAttachement = z.object({
 
 
 const gmailMessageithAttachementValidator = (payload: TGmailMessage) => {
-    return gmailMessageWithAttachement.required().partial({ subject: true }).refine((data) => {
-        const filled = [data.message, data.messageId].filter(Boolean).length
-        return filled === 1
-    }).safeParse(payload)
+    return gmailMessageWithAttachement.required().partial({ subject: true, message: true, messageId: true }).safeParse(payload)
 }
 
 export { gmailMessageValidator, TGmailMessage, gmailMessageithAttachementValidator }

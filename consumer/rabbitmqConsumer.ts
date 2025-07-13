@@ -23,6 +23,7 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
 
         const { error, data } = gmailMessageValidator(JSON.parse(message.content.toString()))
         if (error) {
+            console.log("bad message")
             channel.nack(message, false, false)
             return
         }
@@ -49,14 +50,13 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
         }
         oauth2_client.setCredentials({ access_token: integration.gmailAccessToken, refresh_token: integration.gmailRefreshToken })
         const gmail = google.gmail({ version: "v1", auth: oauth2_client })
-
         try {
 
             const raw_messages = [
                 `To: ${data.recipient}`,
                 'Content-Type: text/plain; charset="UTF-8"',
                 'MIME-Version: 1.0',
-                'Subject: Test Subject',
+                `Subject: ${data.subject || ""}`,
                 '',
                 data.text,
             ].join("\r\n")
@@ -70,7 +70,6 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
                 }
             })
             taskData.status = TTaskStatus.SUCCESS
-
         } catch (e) {
             taskData.status = TTaskStatus.FAILED
             channel.ack(message)
@@ -79,7 +78,6 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
         // for a task to fail , then a message already exist
 
         const { message: exist_msg, ...other } = data
-
         await upsertTask({
             channel,
             integration: taskData.integration,
@@ -93,6 +91,9 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             q: "send_gmail_message",
             payload: JSON.stringify({ ...other, messageId: msgID })
         })
+
+        channel.ack(message)
+
 
     })
 
@@ -175,6 +176,7 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             q: "draft_gmail_message",
             payload: JSON.stringify({ ...other, messageId: msgID })
         })
+        channel.ack(message)
     })
 
 
@@ -219,7 +221,7 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             const raw_messages = [
                 `MIME-Version: 1.0`,
                 `To: ${data.recipient}`,
-                `Subject: ${data.subject}`,
+                `Subject: ${data.subject || ""}`,
                 `Content-Type: multipart/mixed; boundary="${boundary}"`,
                 '',
                 `--${boundary}`,
@@ -269,6 +271,7 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             q: "send_gmail_message",
             payload: JSON.stringify({ ...other, messageId: msgID })
         })
+        channel.ack(message)
     })
 
 }
