@@ -5,7 +5,7 @@ import Redis from "../redis/redis"
 import { redisMessage } from "./redisMessage"
 import { TGmailMessage } from "../zod/gmailMessage"
 
-const validateOrCreateMessage = async (channel: Channel, message: ConsumeMessage, prisma: PrismaClient, redis: Redis, data?: TGmailMessage) => {
+const validateOrCreateMessage = async (channel: Channel, message: ConsumeMessage, prisma: PrismaClient, redis: Redis, data?: Pick<TGmailMessage, "message" | "messageId">) => {
     if (!data) {
         return null
     }

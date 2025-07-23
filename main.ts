@@ -2,13 +2,14 @@ import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
 import gmailRouter from "./routes/gmail.routes"
+import meetRouter from "./routes/meet.routes"
 import { PrismaClient } from "@prisma/client"
 import { google } from "googleapis"
 import type { TState } from "./types"
 import serviceMap from "./utils/serviceMap"
-import amqp from "amqplib"
 import Redis from "./redis/redis"
-import consumers from "./consumer/rabbitmqConsumer"
+import calendarRouter from "./routes/calendar.routes"
+import connectRabbitMQ from "./utils/connectRabbitMq"
 dotenv.config()
 const app = express()
 
@@ -24,20 +25,6 @@ const oauth2_client = new google.auth.OAuth2(
     process.env.REDIRECT_URI + "/google/services",
 )
 
-const createRabbitMQ = async () => {
-    try {
-        const RABBIT_MQ_URL = process.env.NODE_ENV === "production" ? process.env.RABBIT_MQ_SERVER : "amqp://localhost"
-        const connection = await amqp.connect(RABBIT_MQ_URL as string)
-        const channel = await connection.createChannel()
-
-        channel.assertQueue("send_gmail_message")
-        channel.assertQueue("draft_gmail_message")
-        channel.assertQueue("send_gmail_message_with_attachement")
-        consumers(channel, oauth2_client, redis)
-    } catch (e) {
-        console.log("❌ 🐰 an Error occured while connecting to RabbitMQ")
-    }
-}
 
 
 
@@ -45,6 +32,8 @@ app.use(cors())
 app.use(express.json())
 
 app.use("/app/gmail", gmailRouter(oauth2_client))
+app.use("/app/calendar", calendarRouter(oauth2_client))
+app.use("/app/meet", meetRouter(oauth2_client))
 
 
 
@@ -67,7 +56,7 @@ app.get("/google/services", async (req, res) => {
 
     if (integration) {
         await prisma.integration.update({ where: { id: integration.id }, data: { gmailAccessToken: tokens.access_token } })
-        res.send("gmail integration successful")
+        res.send(`${parsed_state.service} integration successful`)
         return
     }
     //NOTE: creation of access token is for specific gmail service e.g gmail, drive
@@ -77,17 +66,24 @@ app.get("/google/services", async (req, res) => {
         res.status(404).send({ message: "service not supported" })
         return
     }
-    await prisma.integration.create({
-        data: {
-            service: parsed_state.service,
-            status: true,
-            workspaceId: parsed_state.workspaceId,
-            ...credentials
-        }
+
+    await prisma.$transaction(async (tx) => {
+        await tx.integration.create({
+            data: {
+                service: parsed_state.service,
+                status: true,
+                workspaceId: parsed_state.workspaceId,
+                ...credentials
+            }
+        })
+
+
+        await tx.workspace.update({ where: { id: parsed_state.workspaceId, }, data: { integrations: { push: "calendar" } } })
     })
 
 
-    res.send("gmail integration activated successfully");
+
+    res.send(`${parsed_state.service} integration activated successfully`);
 })
 
 
@@ -97,7 +93,7 @@ app.get("/google/services", async (req, res) => {
 const PORT = 4000
 
 app.listen(PORT, async () => {
-    await createRabbitMQ()
+    await connectRabbitMQ(oauth2_client, redis)
     try {
         await redis.connect()
         console.log("🔗connected to redis successfully")
