@@ -6,6 +6,8 @@ import { google } from "googleapis"
 import upsertTask from "../utils/upsertTask"
 import Redis from "../redis/redis"
 import validateEventPayload from "../zod/events"
+import crypto from "crypto"
+
 const prisma = new PrismaClient()
 
 
@@ -307,9 +309,24 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             oauth2_client.setCredentials({ access_token: integration.calendarAccessToken, refresh_token: integration.calendarRefreshToken })
 
             const calendar = google.calendar({ version: "v3", auth: oauth2_client })
-            const { message: calenderMessage, messageId, integrationId, workspaceId, ...event } = data
+            const { message: calenderMessage, messageId, integrationId, workspaceId, addConferenceLink, ...event } = data
+            let evt = { ...event }
+            if (addConferenceLink) {
+                const conference = {
+                    conferenceData: {
+                        createRequest: {
+                            requestId: `meet-${crypto.randomUUID()}}`, // unique per request
+                            conferenceSolutionKey: {
+                                type: "hangoutsMeet",
+                            },
+                        }
+                    }
+                }
+
+                evt = { ...evt, ...conference }
+            }
             try {
-                await calendar.events.insert({ calendarId: "primary", requestBody: event })
+                await calendar.events.insert({ calendarId: "primary", conferenceDataVersion: 1, requestBody: evt })
                 taskData.status = TTaskStatus.SUCCESS
             } catch (e) {
                 taskData.status = TTaskStatus.FAILED
@@ -317,8 +334,6 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
             }
 
             const { message: exist_msg, ...other } = data
-
-
 
             await upsertTask({
                 channel,

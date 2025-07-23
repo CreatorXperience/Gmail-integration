@@ -17,7 +17,7 @@ const calendarEventSchema = z.object({
         dateTime: z.string().min(1, "Start dateTime is required"),
         timeZone: z.string().min(1, "Start timeZone is required"),
     }),
-
+    addConferenceLink: z.boolean().optional(),
     end: z.object({
         dateTime: z.string().min(1, "End dateTime is required"),
         timeZone: z.string().min(1, "End timeZone is required"),
@@ -43,7 +43,7 @@ type TEvent = Required<z.infer<typeof calendarEventSchema>>
 
 
 const validateEventPayload = (payload: TEvent) => {
-    return calendarEventSchema.required().partial({ description: true, recurrence: true, message: true, attendees: true }).safeParse(payload)
+    return calendarEventSchema.required().partial({ description: true, recurrence: true, message: true, attendees: true, addConferenceLink: true }).safeParse(payload)
 }
 
 export default validateEventPayload
