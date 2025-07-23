@@ -5,6 +5,9 @@ import { PrismaClient } from "@prisma/client"
 import { google } from "googleapis"
 import upsertTask from "../utils/upsertTask"
 import Redis from "../redis/redis"
+import validateEventPayload from "../zod/events"
+import crypto from "crypto"
+
 const prisma = new PrismaClient()
 
 
@@ -97,7 +100,6 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
 
     })
 
-
     channel.consume("draft_gmail_message", async (message: ConsumeMessage | null) => {
 
         if (!message) {
@@ -178,7 +180,6 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
         })
         channel.ack(message)
     })
-
 
     channel.consume("send_gmail_message_with_attachement", async (message: ConsumeMessage | null) => {
         if (!message) {
@@ -273,6 +274,89 @@ const consumers = (channel: amqp.Channel, oauth2_client: any, redis: Redis) => {
         })
         channel.ack(message)
     })
+
+    channel.consume("create_calendar_event", async (message: ConsumeMessage | null) => {
+
+        if (!message) {
+            throw new Error("Null Rabbit Message")
+        }
+        try {
+
+            const { data, error } = validateEventPayload(JSON.parse(message.content.toString()))
+            if (error) {
+                channel.nack(message, false, false)
+                console.log(error.errors[0].message)
+                return
+            }
+            const msgID = await validateOrCreateMessage(channel, message, prisma, redis, data)
+            if (!msgID) {
+                channel.nack(message, false, false)
+                throw new Error("messageId not found in both db")
+            }
+            const taskData = {
+                messageId: msgID,
+                integration: "calendar",
+                text: "create calendar event",
+                workspaceId: data.workspaceId,
+                status: TTaskStatus.FAILED // default to fail, we'll update to true if successful
+            };
+
+            const integration = await prisma.integration.findUnique({ where: { id: data.integrationId } })
+            if (!integration) {
+                console.log("this is not suppose to happen, integration not found")
+                return
+            }
+            oauth2_client.setCredentials({ access_token: integration.calendarAccessToken, refresh_token: integration.calendarRefreshToken })
+
+            const calendar = google.calendar({ version: "v3", auth: oauth2_client })
+            const { message: calenderMessage, messageId, integrationId, workspaceId, addConferenceLink, ...event } = data
+            let evt = { ...event }
+            if (addConferenceLink) {
+                const conference = {
+                    conferenceData: {
+                        createRequest: {
+                            requestId: `meet-${crypto.randomUUID()}}`, // unique per request
+                            conferenceSolutionKey: {
+                                type: "hangoutsMeet",
+                            },
+                        }
+                    }
+                }
+
+                evt = { ...evt, ...conference }
+            }
+            try {
+                await calendar.events.insert({ calendarId: "primary", conferenceDataVersion: 1, requestBody: evt })
+                taskData.status = TTaskStatus.SUCCESS
+            } catch (e) {
+                taskData.status = TTaskStatus.FAILED
+                console.log(e)
+            }
+
+            const { message: exist_msg, ...other } = data
+
+            await upsertTask({
+                channel,
+                integration: taskData.integration,
+                message,
+                msgID: taskData.messageId,
+                prisma,
+                redis,
+                status: taskData.status,
+                taskId: data.taskId,
+                workspaceId: taskData.workspaceId,
+                q: "create_calendar_event",
+                payload: JSON.stringify({ ...other, messageId: msgID })
+            })
+
+            channel.ack(message)
+
+        } catch (e) {
+            channel.nack(message, false, false)
+            console.log(e)
+        }
+    })
+
 
 }
 

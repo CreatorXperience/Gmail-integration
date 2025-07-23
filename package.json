@@ -12,6 +12,8 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@google-apps/meet": "^0.7.0",
+    "@googleapis/meet": "^2.0.1",
     "@prisma/client": "^6.10.1",
     "@types/amqplib": "^0.10.7",
     "@types/cors": "^2.8.19",
